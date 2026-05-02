@@ -1,0 +1,28 @@
+# Environment
+.env
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+.DS_Store
+
+# Database
+*.db
+pgdata/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+logs/
