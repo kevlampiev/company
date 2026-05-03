@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   db:
-    image: pgvector/pgvector:pg16
+    image: alexeye/postgres-azure-flex:17
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}

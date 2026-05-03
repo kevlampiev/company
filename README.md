@@ -5,21 +5,21 @@
 ## Быстрый старт
 
 ```bash
-# 1. Копируем пример конфигурации
-cp .env.example .env
+# 1. Создаём .env со случайно сгенерированными секретами
+cd backend && uv run python -m scripts.init_env && cd ..
+# (открыть .env и проверить значения; ADMIN_PASSWORD/POSTGRES_PASSWORD/JWT_SECRET/ENCRYPTION_KEY заполнены автоматически)
 
-# 2. Редактируем .env (задаём логин/пароль админа, ключи шифрования)
-# Для генерации ENCRYPTION_KEY: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-
-# 3. Создаём SSL-сертификаты для nginx (самоподписанные для локалки)
+# 2. Создаём SSL-сертификаты для nginx (самоподписанные для локалки)
 mkdir -p nginx/ssl
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout nginx/ssl/key.pem -out nginx/ssl/cert.pem \
   -subj "/CN=localhost"
 
-# 4. Запускаем всё одной командой
+# 3. Запускаем всё одной командой
 docker compose up -d --build
 ```
+
+`JWT_SECRET`, `ENCRYPTION_KEY`, `ADMIN_PASSWORD`, `POSTGRES_PASSWORD` обязательны — без них приложение не запустится (`pydantic.ValidationError`). Скрипт `init_env` гарантирует, что все они корректно сгенерированы.
 
 Приложение будет доступно по адресу: https://localhost
 
@@ -130,10 +130,45 @@ docker compose down -v
 ## Архитектура
 
 - **Frontend**: Vue 3 + Vite + TailwindCSS (порт 3000, проксируется через nginx)
-- **Backend**: FastAPI + SQLAlchemy 2.0 + LangGraph (порт 8000)
-- **Database**: PostgreSQL 16 + pgvector
+- **Backend**: FastAPI + SQLAlchemy 2.0 + LangGraph (порт 8000), пакеты управляются `uv` (`backend/pyproject.toml` + `backend/uv.lock`)
+- **Database**: `alexeye/postgres-azure-flex:17` — PostgreSQL 17 с расширениями Azure Database for PostgreSQL Flexible Server (pgvector, TimescaleDB, pg_cron, Apache AGE и др.)
 - **Cache**: Redis
 - **Proxy**: Nginx (HTTPS на 443, HTTP редирект на 80 → 443)
+
+## Локальная разработка Python (host-side)
+
+```bash
+# Mac/Linux:
+make install        # = cd backend && uv sync
+make check          # lint + typecheck + tests; обязателен перед push
+make test           # только pytest (нужен запущенный Docker для testcontainers)
+
+# Windows (без make):
+pwsh ./tasks.ps1 install
+pwsh ./tasks.ps1 check
+```
+
+Полный список целей: `make help` или `pwsh ./tasks.ps1 help`.
+
+После изменения `pyproject.toml` / `uv.lock` пересоберите backend-образ: `docker compose up -d --build backend` (или `make up`).
+
+Опционально — поставьте локальный pre-commit hook (ruff + format + базовая гигиена), чтобы grязные файлы не уходили в коммиты:
+
+```bash
+pwsh ./tasks.ps1 install     # ставит pre-commit как dev-dep
+cd backend && uv run pre-commit install
+```
+
+## Обновление образа Postgres
+
+Если у вас уже есть `pgdata`-том, инициализированный другим образом (например, прежним `pgvector/pgvector:pg16`), он может не подняться под `alexeye/postgres-azure-flex:16` — у нового образа дополнительные `shared_preload_libraries` (pg_cron, timescaledb и др.). Чистый путь:
+
+```bash
+docker compose down -v          # удаляет pgdata-том — все боты/сообщения теряются
+docker compose up -d --build
+```
+
+Если в томе есть данные, которые жалко терять, сначала сделайте `pg_dump` на старом образе и восстановите после переключения.
 
 ## Безопасность
 

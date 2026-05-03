@@ -163,7 +163,7 @@ async function addDemoBot(type) {
   if (!type) return
   const demo = demoBots[type]
   if (!demo) return
-  
+
   try {
     const { data } = await api.post('/bots', {
       name: demo.name,
