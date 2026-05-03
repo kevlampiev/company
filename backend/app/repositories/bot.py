@@ -1,4 +1,5 @@
 """Bot row queries."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, select

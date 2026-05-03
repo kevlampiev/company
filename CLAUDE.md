@@ -121,7 +121,23 @@ Browser → nginx (443, TLS) → `/` to `frontend:3000` (Vite) or `/api/` to `ba
 `process_chat` appends a fixed Russian disclaimer (`*Справка носит информационный характер...*`) to every assistant reply, persists both user and assistant messages to the `messages` table keyed by `(bot_id, thread_id)`, and returns `ChatResponse`. There is no streaming; the call is a single blocking POST with a 60s timeout.
 
 ### Schema management
-`backend/app/db/models.py` defines `Admin`, `Bot`, `ClawApiKey`, `Message`. **There are no migrations.** On startup `main.py` runs `Base.metadata.create_all`, which creates missing tables but does not alter existing columns. To change a column type or add a non-nullable column to an existing deployment you must either drop the volume (`docker compose down -v`) or write the ALTER yourself — adding the field to the model alone is silently insufficient.
+`backend/app/db/models.py` defines the SQLAlchemy declarative models (`Admin`, `Bot`, `ClawApiKey`, `Message`). Schema evolution goes through **Alembic** (`backend/alembic/`):
+
+- `lifespan` in `main.py` runs `alembic upgrade head` on startup (via `asyncio.to_thread`).
+- Migrations live under `backend/alembic/versions/`. The first one (`*_initial_schema.py`) captures the four tables.
+- After changing a model, generate a new migration:
+  ```bash
+  cd backend
+  # Spin up a clean postgres (the autogenerate diffs models vs DB schema):
+  docker run --rm -d --name agen-pg -e POSTGRES_PASSWORD=t -e POSTGRES_DB=ai_bots -p 55432:5432 postgres:17-alpine
+  sleep 3
+  DATABASE_URL='postgresql+asyncpg://postgres:t@localhost:55432/ai_bots' uv run alembic upgrade head      # bring tmp DB up to current head
+  DATABASE_URL='postgresql+asyncpg://postgres:t@localhost:55432/ai_bots' uv run alembic revision --autogenerate -m "describe change"
+  docker rm -f agen-pg
+  # Inspect the generated file under alembic/versions/, edit if needed, then commit.
+  ```
+- Tests bypass migrations and use `Base.metadata.create_all` for speed (in `tests/conftest.py::_setup_schema`). When a migration changes the schema, the model definitions must update in the same commit so tests stay representative.
+- Existing volumes from before the alembic landing need a one-time `alembic stamp head` (or `docker compose down -v`) so alembic doesn't try to re-create existing tables on first upgrade.
 
 The image automatically `CREATE EXTENSION`s ~44 extensions inside `POSTGRES_DB` on first init — including `vector`, `timescaledb`, `postgis`, `age`, `pg_graphql`, `plv8`, `hll`, `pgrouting`, `pgtap`. So pgvector is **already live** in `ai_bots` once the volume is fresh; the eventual RAG work just needs to add the column and embedding pipeline. To see what's installed: `docker compose exec db psql -U postgres -d ai_bots -c "SELECT extname FROM pg_extension ORDER BY extname;"`.
 

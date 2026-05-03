@@ -1,4 +1,5 @@
 """FastAPI dependencies — currently just admin bearer-token auth."""
+
 from fastapi import HTTPException, Request
 
 from app.core.security import decode_token

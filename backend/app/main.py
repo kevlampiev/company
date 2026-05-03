@@ -1,12 +1,16 @@
+import asyncio
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from alembic.config import Config as AlembicConfig
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from alembic import command
 from app.core.encryption import encrypt_api_key
 from app.core.security import (
     create_access_token,
@@ -15,8 +19,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.db.models import Base
-from app.db.session import async_session, engine, get_db
+from app.db.session import async_session, get_db
 from app.dependencies import get_current_user
 from app.repositories import admin as admin_repo
 from app.repositories import bot as bot_repo
@@ -24,11 +27,18 @@ from app.repositories import claw_key as claw_repo
 from app.schemas import auth, bot
 from app.schemas import chat as chat_schema
 
+ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
+
+
+def _run_alembic_upgrade() -> None:
+    """Synchronous alembic upgrade. Called from lifespan via asyncio.to_thread."""
+    config = AlembicConfig(str(ALEMBIC_INI))
+    command.upgrade(config, "head")
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await asyncio.to_thread(_run_alembic_upgrade)
     async with async_session() as db:
         await admin_repo.ensure_exists(db)
     logger.info("Application started")

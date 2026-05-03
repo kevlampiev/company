@@ -1,4 +1,5 @@
 """Admin row queries + the first-startup seed."""
+
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
