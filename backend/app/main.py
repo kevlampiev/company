@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
@@ -16,7 +19,18 @@ from app.db.session import async_session, engine, get_db
 from app.schemas import auth, bot
 from app.schemas import chat as chat_schema
 
-app = FastAPI(title="AI Bot Manager", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    async with async_session() as db:
+        await crud.ensure_admin_exists(db)
+    logger.info("Application started")
+    yield
+
+
+app = FastAPI(title="AI Bot Manager", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,16 +39,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-async def startup():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    async with async_session() as db:
-        await crud.ensure_admin_exists(db)
-    logger.info("Application started")
 
 
 @app.post("/api/v1/auth/login", response_model=auth.TokenResponse)
