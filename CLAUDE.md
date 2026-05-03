@@ -8,9 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Stack
 
-- **Backend**: Python 3.12, FastAPI, SQLAlchemy 2.0 (async), `asyncpg`, `httpx`, `passlib`/`bcrypt` (auth), `cryptography.fernet` (key encryption), `python-jose` (JWT), `loguru`. `langgraph` and `pgvector` are in `requirements.txt` but not yet wired into the chat path.
+- **Backend**: Python 3.12, FastAPI, SQLAlchemy 2.0 (async), `asyncpg`, `httpx`, `passlib`/`bcrypt` (auth), `cryptography.fernet` (key encryption), `python-jose` (JWT), `loguru`. `langgraph` and `pgvector` are declared as deps but not yet wired into the chat path. **Package management is `uv`** — `backend/pyproject.toml` is the source of truth, `backend/uv.lock` is committed. There is no `requirements.txt`.
 - **Frontend**: Vue 3 + Vite + TailwindCSS + vue-router + axios.
-- **Infra**: PostgreSQL 16 (with pgvector image), Redis 7, Nginx (HTTPS terminator), all orchestrated via `docker-compose.yml`.
+- **Infra**: PostgreSQL 16 via `alexeye/postgres-azure-flex:16` (Azure Database for PostgreSQL Flexible Server extension parity — bundles pgvector, TimescaleDB, pg_cron, Apache AGE, pg_stat_statements, and ~30 other extensions, several pre-loaded via `shared_preload_libraries`), Redis 7, Nginx (HTTPS terminator), all orchestrated via `docker-compose.yml`.
 
 > The root `package.json`, `tsconfig.json`, `.eslintrc.json`, and `AGENTS.md` describe a Node/TypeScript project with a `src/` folder, jest tests, and eslint. **None of that exists here** — they are stale template scaffolding. Do not run `npm test`, `npm run lint`, `npm run typecheck`, etc., from the repo root; they will fail. There is currently no automated test suite. (`test_db.py` at the root is a one-off DB-connectivity script with hardcoded credentials, not a test.)
 
@@ -45,6 +45,21 @@ docker compose down -v                            # full reset (drops volumes)
 ```
 
 The backend mounts `./backend` into the container as `/app`, so Python edits are live; uvicorn does **not** auto-reload (CMD has no `--reload`), so use `docker compose restart backend` after backend changes. The frontend container runs Vite dev (`npm run dev`); HMR works through nginx.
+
+The backend image puts the venv at `/opt/venv`, **outside** the bind-mount, so the bind doesn't shadow it. Don't move it back under `/app` without also revisiting the bind mount.
+
+For host-side Python work (IDE intellisense, ad-hoc scripts, future `pytest`):
+
+```bash
+cd backend
+uv sync                          # creates backend/.venv from uv.lock
+uv run python -c "import app.main"   # smoke check
+uv add <pkg>                     # add a runtime dep (updates pyproject.toml + uv.lock)
+uv add --dev <pkg>               # add a dev-only dep
+uv lock --upgrade-package <pkg>  # bump a single dep
+```
+
+After changing `pyproject.toml` or `uv.lock`, rebuild the backend image (`docker compose up -d --build backend`) so the in-container `/opt/venv` is regenerated.
 
 External ports are intentionally offset to avoid clashing with anything on the host:
 
@@ -81,6 +96,19 @@ Both live in `backend/app/crud.py`.
 ### Schema management
 `backend/app/db/models.py` defines `Admin`, `Bot`, `ClawApiKey`, `Message`. **There are no migrations.** On startup `main.py` runs `Base.metadata.create_all`, which creates missing tables but does not alter existing columns. To change a column type or add a non-nullable column to an existing deployment you must either drop the volume (`docker compose down -v`) or write the ALTER yourself — adding the field to the model alone is silently insufficient.
 
+The image automatically `CREATE EXTENSION`s ~44 extensions inside `POSTGRES_DB` on first init — including `vector`, `timescaledb`, `postgis`, `age`, `pg_graphql`, `plv8`, `hll`, `pgrouting`, `pgtap`. So pgvector is **already live** in `ai_bots` once the volume is fresh; the eventual RAG work just needs to add the column and embedding pipeline. To see what's installed: `docker compose exec db psql -U postgres -d ai_bots -c "SELECT extname FROM pg_extension ORDER BY extname;"`.
+
+### Upgrading the Postgres image
+
+Existing `pgdata` volumes initialised under a different Postgres image (e.g. the previous `pgvector/pgvector:pg16`) may not start cleanly under `alexeye/postgres-azure-flex:16` because the new image preloads additional libraries (`pg_cron`, `timescaledb`, etc.). The clean recovery for this project is:
+
+```bash
+docker compose down -v          # drops the pgdata volume — all bots/messages lost
+docker compose up -d --build
+```
+
+If that volume holds anything you care about, take a `pg_dump` first while the old image is still running, then restore after the swap.
+
 ### Frontend
 Three views (`LoginView`, `DashboardBots`, `ChatView`) routed by `vue-router`. Auth state is `localStorage['access_token']`; the router guard redirects on `requiresAuth` / `guest` meta. There is currently no Pinia install despite a `stores/auth.js` file (`useAuthStore` is imported but the import works because the store does not actually need Pinia for the read path used in the guard — be careful when expanding it).
 
@@ -95,16 +123,21 @@ Three views (`LoginView`, `DashboardBots`, `ChatView`) routed by `vue-router`. A
 ## Where things live
 
 ```
-backend/app/
-  main.py              FastAPI app, route handlers, startup hook
-  config.py            pydantic-settings (reads .env)
-  crud.py              DB access + auth dependencies (get_current_user, verify_claw_key)
-  db/models.py         SQLAlchemy 2.0 declarative models
-  db/session.py        async engine + sessionmaker
-  core/security.py     bcrypt + JWT helpers
-  core/encryption.py   Fernet wrappers for LLM API keys
-  schemas/             pydantic request/response models
-  services/chat_service.py   LLM dispatch + message persistence
+backend/
+  pyproject.toml       runtime + dev deps (uv-managed)
+  uv.lock              committed lockfile
+  .python-version      pinned to 3.12 (matches Dockerfile)
+  Dockerfile           multi-stage uv build, venv at /opt/venv
+  app/
+    main.py            FastAPI app, route handlers, startup hook
+    config.py          pydantic-settings (reads .env)
+    crud.py            DB access + auth dependencies (get_current_user, verify_claw_key)
+    db/models.py       SQLAlchemy 2.0 declarative models
+    db/session.py      async engine + sessionmaker
+    core/security.py   bcrypt + JWT helpers
+    core/encryption.py Fernet wrappers for LLM API keys
+    schemas/           pydantic request/response models
+    services/chat_service.py   LLM dispatch + message persistence
 frontend/src/
   views/{LoginView,DashboardBots,ChatView}.vue
   router/index.js      route guard reads localStorage

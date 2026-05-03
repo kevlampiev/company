@@ -130,10 +130,34 @@ docker compose down -v
 ## Архитектура
 
 - **Frontend**: Vue 3 + Vite + TailwindCSS (порт 3000, проксируется через nginx)
-- **Backend**: FastAPI + SQLAlchemy 2.0 + LangGraph (порт 8000)
-- **Database**: PostgreSQL 16 + pgvector
+- **Backend**: FastAPI + SQLAlchemy 2.0 + LangGraph (порт 8000), пакеты управляются `uv` (`backend/pyproject.toml` + `backend/uv.lock`)
+- **Database**: `alexeye/postgres-azure-flex:16` — PostgreSQL 16 с расширениями Azure Database for PostgreSQL Flexible Server (pgvector, TimescaleDB, pg_cron, Apache AGE и др.)
 - **Cache**: Redis
 - **Proxy**: Nginx (HTTPS на 443, HTTP редирект на 80 → 443)
+
+## Локальная разработка Python (host-side)
+
+Для работы IDE, запуска тестов и ad-hoc скриптов вне контейнеров:
+
+```bash
+cd backend
+uv sync                               # создаёт backend/.venv по uv.lock
+uv run python -c "import app.main"    # smoke-проверка
+uv run pytest                         # когда тесты появятся
+```
+
+Контейнерный venv (`/opt/venv`) и host-side `.venv` независимы. После изменения `pyproject.toml` или `uv.lock` пересоберите backend-образ: `docker compose up -d --build backend`.
+
+## Обновление образа Postgres
+
+Если у вас уже есть `pgdata`-том, инициализированный другим образом (например, прежним `pgvector/pgvector:pg16`), он может не подняться под `alexeye/postgres-azure-flex:16` — у нового образа дополнительные `shared_preload_libraries` (pg_cron, timescaledb и др.). Чистый путь:
+
+```bash
+docker compose down -v          # удаляет pgdata-том — все боты/сообщения теряются
+docker compose up -d --build
+```
+
+Если в томе есть данные, которые жалко терять, сначала сделайте `pg_dump` на старом образе и восстановите после переключения.
 
 ## Безопасность
 
