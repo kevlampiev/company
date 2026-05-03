@@ -137,16 +137,27 @@ docker compose down -v
 
 ## Локальная разработка Python (host-side)
 
-Для работы IDE, запуска тестов и ad-hoc скриптов вне контейнеров:
-
 ```bash
-cd backend
-uv sync                               # создаёт backend/.venv по uv.lock
-uv run python -c "import app.main"    # smoke-проверка
-uv run pytest                         # когда тесты появятся
+# Mac/Linux:
+make install        # = cd backend && uv sync
+make check          # lint + typecheck + tests; обязателен перед push
+make test           # только pytest (нужен запущенный Docker для testcontainers)
+
+# Windows (без make):
+pwsh ./tasks.ps1 install
+pwsh ./tasks.ps1 check
 ```
 
-Контейнерный venv (`/opt/venv`) и host-side `.venv` независимы. После изменения `pyproject.toml` или `uv.lock` пересоберите backend-образ: `docker compose up -d --build backend`.
+Полный список целей: `make help` или `pwsh ./tasks.ps1 help`.
+
+После изменения `pyproject.toml` / `uv.lock` пересоберите backend-образ: `docker compose up -d --build backend` (или `make up`).
+
+Опционально — поставьте локальный pre-commit hook (ruff + format + базовая гигиена), чтобы grязные файлы не уходили в коммиты:
+
+```bash
+pwsh ./tasks.ps1 install     # ставит pre-commit как dev-dep
+cd backend && uv run pre-commit install
+```
 
 ## Обновление образа Postgres
 

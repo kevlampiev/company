@@ -71,6 +71,36 @@ External ports are intentionally offset to avoid clashing with anything on the h
 
 In production usage everything goes through nginx on 443; the offset host ports are for local debugging only.
 
+## Testing & quality gates
+
+```bash
+# Mac/Linux:
+make install     # uv sync
+make check       # lint + typecheck + test (pre-push)
+make test        # pytest only
+make test-cov    # with coverage
+
+# Windows (no make):
+pwsh ./tasks.ps1 install
+pwsh ./tasks.ps1 check
+```
+
+`make check` is the contract for "is this branch ready to push": ruff (lint), mypy (type check), pytest (26 integration + unit tests). Each individually accessible as `make lint` / `make typecheck` / `make test`.
+
+**Tests live under `backend/tests/`.** Layout:
+
+- `conftest.py` — starts a `postgres:17-alpine` testcontainer at session start (synchronously, before pytest collects modules), sets env vars, then async fixtures handle schema + admin seed + per-test TRUNCATE. Switch the image to `pgvector/pgvector:pg17` if/when models grow a `vector` column.
+- `test_config.py`, `test_encryption.py`, `test_security.py` — pure-function unit tests, no container needed (but the conftest still starts one — at <5s session overhead it's not worth bypassing).
+- `test_auth.py`, `test_bots.py`, `test_claw.py`, `test_chat.py` — integration tests via `httpx.AsyncClient` against the FastAPI app, with `respx` mocking outbound LLM calls.
+
+The session-scoped event loop (`asyncio_default_test_loop_scope = "session"` in `pyproject.toml`) is **load-bearing** — without it, SQLAlchemy async connections get pinned to a fixture loop that's dead by the time tests run. If you rearrange test loop scopes, expect "Task was destroyed but it is pending" errors.
+
+**Pre-commit** is configured in `.pre-commit-config.yaml`: ruff (`--fix`) + ruff-format + trailing-whitespace + EOF-fixer + check-yaml/toml/merge-conflict. Run `pre-commit install` once after `make install`. The hook is sub-second by design — no mypy or pytest. Those run via `make check` before push.
+
+**ruff config** is `[tool.ruff.lint]` in `backend/pyproject.toml`: `select = E, F, I, UP, B`, `ignore = B008` (FastAPI `Depends(...)` defaults are idiomatic). Deliberately not enabling `N` (pydantic uses UPPER_CASE for settings), `D` (no docstring discipline yet), or `ANN` (existing code has gaps).
+
+**mypy config** is lenient: `ignore_missing_imports = true`, `check_untyped_defs = true`, **not** `strict = true`. The bar is "doesn't lie about types where types are present"; raising the bar to full annotation coverage is its own future commit.
+
 ## Architecture
 
 ### Request flow

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, Request
 from loguru import logger
@@ -78,7 +78,7 @@ async def get_bot_by_name(db: AsyncSession, name: str) -> Bot | None:
 async def update_bot(db: AsyncSession, bot: Bot, data: dict):
     for key, value in data.items():
         setattr(bot, key, value)
-    bot.updated_at = datetime.utcnow()
+    bot.updated_at = datetime.now(UTC)
     await db.commit()
 
 

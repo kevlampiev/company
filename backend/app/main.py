@@ -92,7 +92,7 @@ async def update_bot(
     if not bot_obj:
         raise HTTPException(status_code=404, detail="Bot not found")
 
-    update_data = data.dict(exclude_unset=True)
+    update_data = data.model_dump(exclude_unset=True)
     if "api_key" in update_data and update_data["api_key"]:
         update_data["api_key_encrypted"] = encrypt_api_key(update_data.pop("api_key"))
 
