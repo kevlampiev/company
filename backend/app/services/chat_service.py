@@ -2,14 +2,14 @@ import httpx
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import crud
 from app.core.encryption import decrypt_api_key
 from app.db.models import Bot, Message
+from app.repositories import bot as bot_repo
 from app.schemas.chat import ChatResponse
 
 
 async def process_chat(db: AsyncSession, message) -> ChatResponse:
-    bot = await crud.get_bot_by_id(db, message.bot_id)
+    bot = await bot_repo.get_by_id(db, message.bot_id)
     if not bot or not bot.is_active:
         raise ValueError("Bot not found or inactive")
 

@@ -107,10 +107,9 @@ The session-scoped event loop (`asyncio_default_test_loop_scope = "session"` in 
 Browser → nginx (443, TLS) → `/` to `frontend:3000` (Vite) or `/api/` to `backend:8000` (FastAPI). Nginx also rewrites `Set-Cookie` to add `SameSite=Strict; HTTPOnly` on `/api/` responses.
 
 ### Two authentication modes
-Both live in `backend/app/crud.py`.
 
-1. **Admin (UI)** — `get_current_user` reads `Authorization: Bearer <JWT>`, decoded with `JWT_SECRET`. Tokens are minted on `/api/v1/auth/login` against the single `admins` row, which is seeded on startup from `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars (only created if no admin exists yet — changing the env later does **not** update the password).
-2. **OpenClaw / external tools** — `verify_claw_key` reads `X-API-Key` and bcrypt-checks it against every row in `claw_api_keys`. Keys are issued via `POST /api/v1/bots/{bot_id}/generate-claw-key` and shown to the user **once**; only the bcrypt hash is stored. Note that `bot_id` on `claw_api_keys` is currently informational — the verifier does not scope keys to a specific bot, any valid key authorizes any bot via `/api/v1/claw`.
+1. **Admin (UI)** — `app/dependencies.py::get_current_user` reads `Authorization: Bearer <JWT>`, decoded with `JWT_SECRET`. Tokens are minted on `/api/v1/auth/login` against the single `admins` row, which is seeded on startup from `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars (only created if no admin exists yet — changing the env later does **not** update the password).
+2. **OpenClaw / external tools** — `app/repositories/claw_key.py::verify_for_bot` reads `X-API-Key` and bcrypt-checks it against rows in `claw_api_keys` **scoped to the requested bot**. Keys are issued via `POST /api/v1/bots/{bot_id}/generate-claw-key` and shown to the user **once**; only the bcrypt hash is stored. The claw endpoint folds missing-key, unknown-bot, inactive-bot, and wrong-key into a single `403 Invalid API key or bot` response so the endpoint can't be probed for bot existence.
 
 ### Per-bot LLM dispatch
 `Bot` rows store `provider`, `model`, `system_prompt`, and `api_key_encrypted` (Fernet, key = `ENCRYPTION_KEY`). `services/chat_service.py::call_llm` branches on `bot.provider`:
@@ -157,14 +156,18 @@ backend/
   .python-version      pinned to 3.12 (matches Dockerfile)
   Dockerfile           multi-stage uv build, venv at /opt/venv
   app/
-    main.py            FastAPI app, route handlers, startup hook
+    main.py            FastAPI app + route handlers + lifespan
     config.py          pydantic-settings (reads .env)
-    crud.py            DB access + auth dependencies (get_current_user, verify_claw_key)
+    dependencies.py    FastAPI dependencies (currently just get_current_user)
+    repositories/      DB query functions, one module per resource
+      admin.py         get_by_username, ensure_exists (first-startup seed)
+      bot.py           create / list_all / get_by_id / get_by_name / update / delete_by_id
+      claw_key.py      create, verify_for_bot
     db/models.py       SQLAlchemy 2.0 declarative models
-    db/session.py      async engine + sessionmaker
+    db/session.py      async engine + sessionmaker + get_db dependency
     core/security.py   bcrypt + JWT helpers
-    core/encryption.py Fernet wrappers for LLM API keys
-    schemas/           pydantic request/response models
+    core/encryption.py Fernet wrappers + mask_api_key
+    schemas/           pydantic request/response models (BotResponse.from_bot for ORM→DTO)
     services/chat_service.py   LLM dispatch + message persistence
 frontend/src/
   views/{LoginView,DashboardBots,ChatView}.vue

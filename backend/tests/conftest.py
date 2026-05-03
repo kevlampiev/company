@@ -43,14 +43,14 @@ from sqlalchemy import text  # noqa: E402
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def _setup_schema():
     """Create tables and seed admin once per session."""
-    from app import crud
     from app.db.models import Base
     from app.db.session import async_session, engine
+    from app.repositories import admin as admin_repo
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     async with async_session() as db:
-        await crud.ensure_admin_exists(db)
+        await admin_repo.ensure_exists(db)
     yield
 
 

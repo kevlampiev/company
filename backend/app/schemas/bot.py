@@ -1,6 +1,10 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
+
+if TYPE_CHECKING:
+    from app.db.models import Bot
 
 
 class BotCreate(BaseModel):
@@ -39,6 +43,25 @@ class BotResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @classmethod
+    def from_bot(cls, bot: "Bot") -> "BotResponse":
+        from app.core.encryption import decrypt_api_key, mask_api_key
+
+        plain = decrypt_api_key(bot.api_key_encrypted) if bot.api_key_encrypted else ""
+        return cls(
+            id=bot.id,
+            name=bot.name,
+            area=bot.area,
+            system_prompt=bot.system_prompt,
+            provider=bot.provider,
+            model=bot.model,
+            api_key_masked=mask_api_key(plain),
+            is_active=bot.is_active,
+            use_rag=bot.use_rag,
+            created_at=bot.created_at,
+            updated_at=bot.updated_at,
+        )
 
 
 class ClawKeyResponse(BaseModel):
