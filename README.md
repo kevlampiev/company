@@ -5,21 +5,21 @@
 ## Быстрый старт
 
 ```bash
-# 1. Копируем пример конфигурации
-cp .env.example .env
+# 1. Создаём .env со случайно сгенерированными секретами
+cd backend && uv run python -m scripts.init_env && cd ..
+# (открыть .env и проверить значения; ADMIN_PASSWORD/POSTGRES_PASSWORD/JWT_SECRET/ENCRYPTION_KEY заполнены автоматически)
 
-# 2. Редактируем .env (задаём логин/пароль админа, ключи шифрования)
-# Для генерации ENCRYPTION_KEY: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-
-# 3. Создаём SSL-сертификаты для nginx (самоподписанные для локалки)
+# 2. Создаём SSL-сертификаты для nginx (самоподписанные для локалки)
 mkdir -p nginx/ssl
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout nginx/ssl/key.pem -out nginx/ssl/cert.pem \
   -subj "/CN=localhost"
 
-# 4. Запускаем всё одной командой
+# 3. Запускаем всё одной командой
 docker compose up -d --build
 ```
+
+`JWT_SECRET`, `ENCRYPTION_KEY`, `ADMIN_PASSWORD`, `POSTGRES_PASSWORD` обязательны — без них приложение не запустится (`pydantic.ValidationError`). Скрипт `init_env` гарантирует, что все они корректно сгенерированы.
 
 Приложение будет доступно по адресу: https://localhost
 

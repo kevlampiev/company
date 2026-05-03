@@ -20,9 +20,7 @@ Everything runs in docker-compose. There is no host-level dev workflow for the b
 
 ```bash
 # First-time setup
-cp .env.example .env                              # then edit secrets
-# generate ENCRYPTION_KEY:
-#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+cd backend && uv run python -m scripts.init_env && cd ..   # writes ../.env with fresh random secrets
 mkdir -p nginx/ssl
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout nginx/ssl/key.pem -out nginx/ssl/cert.pem -subj "/CN=localhost"
@@ -114,7 +112,7 @@ Three views (`LoginView`, `DashboardBots`, `ChatView`) routed by `vue-router`. A
 
 ## Conventions worth knowing
 
-- **Secrets** — admin password, JWT secret, and Fernet key all come from `.env`. The Fernet key must be a 32-byte url-safe base64 string (`Fernet.generate_key()`); using a free-form string will raise on first encrypt.
+- **Secrets** — `JWT_SECRET`, `ENCRYPTION_KEY`, `ADMIN_PASSWORD`, and `POSTGRES_PASSWORD` are required (no defaults). The app refuses to start if any are missing; pydantic raises `ValidationError` listing the missing fields. Generate a fresh `.env` with strong random values via `uv run python -m scripts.init_env` from `backend/`. The Fernet key must be a 32-byte url-safe base64 string (`Fernet.generate_key()`); a free-form string will raise on first encrypt.
 - **bcrypt 72-byte limit** — `ensure_admin_exists` truncates `ADMIN_PASSWORD` to 72 chars. If a user sets a longer password, only the prefix is hashed.
 - **No deprecation shims** — per the user's standing instruction, when removing functionality just remove it; do not keep deprecated paths for backwards compatibility. There are no external API consumers to preserve.
 - **Postgres functions** — when authoring SQL stored functions, do not use transaction control statements (`COMMIT`/`ROLLBACK`); they are not allowed inside Postgres functions.
