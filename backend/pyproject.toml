@@ -60,3 +60,12 @@ python_version = "3.12"
 check_untyped_defs = true
 warn_unused_ignores = true
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/__init__.py", "app/services/__init__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 75

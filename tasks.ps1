@@ -48,7 +48,7 @@ switch ($Task) {
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         & $PSCommandPath typecheck
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        & $PSCommandPath test
+        & $PSCommandPath test-cov
     }
     "up"   { docker compose up -d --build }
     "down" { docker compose down }

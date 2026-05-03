@@ -26,7 +26,7 @@ fmt:  ## ruff format + ruff --fix
 typecheck:  ## mypy on the application package
 	cd backend && uv run mypy app/
 
-check: lint typecheck test  ## the "before-push" target: lint + typecheck + tests
+check: lint typecheck test-cov  ## the "before-push" target: lint + typecheck + tests-with-coverage-threshold
 
 up:  ## docker compose up -d --build (full stack)
 	docker compose up -d --build
