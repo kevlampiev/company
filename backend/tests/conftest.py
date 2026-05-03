@@ -10,6 +10,7 @@ Order of operations on session start:
 
 Switch the testcontainer image to `pgvector/pgvector:pg17` if/when models grow a vector column.
 """
+
 import os
 
 from cryptography.fernet import Fernet

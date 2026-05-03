@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_token, hash_password, verify_password
 from app.db.models import Admin, Bot, ClawApiKey
-from app.db.session import async_session
 from app.schemas import bot as bot_schema
 
 
@@ -94,20 +93,18 @@ async def create_claw_key(db: AsyncSession, bot_id: int, key_hash: str):
     await db.commit()
 
 
-async def verify_claw_key(request: Request):
-    api_key = request.headers.get("X-API-Key")
-    if not api_key:
-        raise HTTPException(status_code=403, detail="API key required")
+async def verify_claw_key_for_bot(db: AsyncSession, api_key: str, bot_id: int) -> bool:
+    """True iff `api_key` matches one of the claw keys issued for `bot_id`.
 
-    async with async_session() as db:
-        result = await db.execute(select(ClawApiKey))
-        keys = result.scalars().all()
-
-        for key in keys:
-            if verify_password(api_key, key.key_hash):
-                return key
-
-        raise HTTPException(status_code=403, detail="Invalid API key")
+    Scopes verification to the bot's own keys — a key issued for bot A no longer
+    unlocks bot B. Iteration is bounded by keys-per-bot (typically 0-2 in personal
+    use), so the bcrypt cost stays small without needing a key-prefix index.
+    """
+    result = await db.execute(select(ClawApiKey).where(ClawApiKey.bot_id == bot_id))
+    for key in result.scalars().all():
+        if verify_password(api_key, key.key_hash):
+            return True
+    return False
 
 
 async def get_bot_response(db: AsyncSession, bot: Bot):

@@ -1,4 +1,5 @@
 """Chat: provider dispatch (OpenAI vs Anthropic) and message persistence."""
+
 import httpx
 import respx
 from sqlalchemy import select
@@ -30,9 +31,7 @@ async def test_chat_dispatches_to_anthropic(client, auth_headers, make_bot):
     )
     with respx.mock:
         route = respx.post("https://api.anthropic.com/v1/messages").mock(
-            return_value=httpx.Response(
-                200, json={"content": [{"text": "hi from anthropic"}]}
-            )
+            return_value=httpx.Response(200, json={"content": [{"text": "hi from anthropic"}]})
         )
         resp = await client.post(
             "/api/v1/chat",

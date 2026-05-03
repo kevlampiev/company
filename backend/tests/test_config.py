@@ -1,4 +1,5 @@
 """Settings validation: required fields, DATABASE_URL rewrite."""
+
 import pytest
 from pydantic import ValidationError
 

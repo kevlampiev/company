@@ -1,4 +1,5 @@
 """Password hashing + JWT helpers."""
+
 from datetime import timedelta
 
 import pytest

@@ -1,4 +1,5 @@
 """Claw (OpenClaw) API key: generate, valid call, invalid call, current any-key-any-bot bug."""
+
 import httpx
 import respx
 from sqlalchemy import select
@@ -44,9 +45,7 @@ async def test_valid_claw_key_calls_llm(client, auth_headers, make_bot):
 
     with respx.mock:
         respx.post("https://api.openai.com/v1/chat/completions").mock(
-            return_value=httpx.Response(
-                200, json={"choices": [{"message": {"content": "hello"}}]}
-            )
+            return_value=httpx.Response(200, json={"choices": [{"message": {"content": "hello"}}]})
         )
         resp = await client.post(
             "/api/v1/claw",
@@ -57,13 +56,8 @@ async def test_valid_claw_key_calls_llm(client, auth_headers, make_bot):
     assert "hello" in resp.json()["answer"]
 
 
-async def test_any_valid_claw_key_authorises_any_bot(client, auth_headers, make_bot):
-    """Locks in *current* (buggy) behaviour: claw_api_keys.bot_id is informational only.
-
-    A key issued for bot A also unlocks bot B because verify_claw_key iterates all keys
-    and ignores the bot scope. The fix lands in a follow-up commit; this test will be
-    inverted then.
-    """
+async def test_claw_key_does_not_authorise_other_bots(client, auth_headers, make_bot):
+    """A key issued for bot A must not unlock bot B."""
     bot_a = await make_bot(name="alpha")
     await make_bot(name="beta", api_key="sk-real")
     keyresp = await client.post(
@@ -72,13 +66,9 @@ async def test_any_valid_claw_key_authorises_any_bot(client, auth_headers, make_
     )
     token = keyresp.json()["token"]
 
-    with respx.mock:
-        respx.post("https://api.openai.com/v1/chat/completions").mock(
-            return_value=httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
-        )
-        resp = await client.post(
-            "/api/v1/claw",
-            headers={"X-API-Key": token},
-            json={"bot_id": "beta", "query": "hi"},
-        )
-    assert resp.status_code == 200  # current bug: should be 403
+    resp = await client.post(
+        "/api/v1/claw",
+        headers={"X-API-Key": token},
+        json={"bot_id": "beta", "query": "hi"},
+    )
+    assert resp.status_code == 403

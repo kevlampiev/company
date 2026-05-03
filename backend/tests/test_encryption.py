@@ -1,4 +1,5 @@
 """Fernet encryption helpers."""
+
 from app.core.encryption import decrypt_api_key, encrypt_api_key
 
 

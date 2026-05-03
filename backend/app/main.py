@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -144,14 +144,23 @@ async def chat(
 @app.post("/api/v1/claw")
 async def claw_endpoint(
     request: chat_schema.ClawRequest,
+    raw: Request,
     db: AsyncSession = Depends(get_db),
-    api_key: str = Depends(crud.verify_claw_key),
 ):
     from app.services.chat_service import process_chat
 
+    api_key = raw.headers.get("X-API-Key")
     bot_obj = await crud.get_bot_by_name(db, request.bot_id)
-    if not bot_obj or not bot_obj.is_active:
-        raise HTTPException(status_code=503, detail="Bot unavailable")
+    # Single 403 for missing key, unknown bot, inactive bot, or wrong key —
+    # collapses these into one failure mode so claw API can't be probed for
+    # bot existence.
+    if (
+        not api_key
+        or not bot_obj
+        or not bot_obj.is_active
+        or not await crud.verify_claw_key_for_bot(db, api_key, bot_obj.id)
+    ):
+        raise HTTPException(status_code=403, detail="Invalid API key or bot")
 
     message = chat_schema.ChatMessage(
         bot_id=bot_obj.id, query=request.query, thread_id=request.thread_id
