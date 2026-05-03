@@ -10,9 +10,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Backend**: Python 3.12, FastAPI, SQLAlchemy 2.0 (async), `asyncpg`, `httpx`, `passlib`/`bcrypt` (auth), `cryptography.fernet` (key encryption), `python-jose` (JWT), `loguru`. `langgraph` and `pgvector` are declared as deps but not yet wired into the chat path. **Package management is `uv`** — `backend/pyproject.toml` is the source of truth, `backend/uv.lock` is committed. There is no `requirements.txt`.
 - **Frontend**: Vue 3 + Vite + TailwindCSS + vue-router + axios.
-- **Infra**: PostgreSQL 16 via `alexeye/postgres-azure-flex:16` (Azure Database for PostgreSQL Flexible Server extension parity — bundles pgvector, TimescaleDB, pg_cron, Apache AGE, pg_stat_statements, and ~30 other extensions, several pre-loaded via `shared_preload_libraries`), Redis 7, Nginx (HTTPS terminator), all orchestrated via `docker-compose.yml`.
+- **Infra**: PostgreSQL 17 via `alexeye/postgres-azure-flex:17` (Azure Database for PostgreSQL Flexible Server extension parity — auto-installs ~44 extensions in `POSTGRES_DB` on init, including pgvector, TimescaleDB, PostGIS, Apache AGE, pg_graphql, pg_cron, pg_stat_statements), Redis 7, Nginx (HTTPS terminator), all orchestrated via `docker-compose.yml`.
 
-> The root `package.json`, `tsconfig.json`, `.eslintrc.json`, and `AGENTS.md` describe a Node/TypeScript project with a `src/` folder, jest tests, and eslint. **None of that exists here** — they are stale template scaffolding. Do not run `npm test`, `npm run lint`, `npm run typecheck`, etc., from the repo root; they will fail. There is currently no automated test suite. (`test_db.py` at the root is a one-off DB-connectivity script with hardcoded credentials, not a test.)
+There is currently no automated test suite — pytest scaffolding is the next planned commit.
 
 ## Run / develop
 

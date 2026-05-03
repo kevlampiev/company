@@ -11,11 +11,6 @@ from app.core.security import hash_password, verify_password, decode_token
 from app.schemas import bot as bot_schema
 
 
-async def get_db():
-    async with async_session() as session:
-        yield session
-
-
 async def ensure_admin_exists(db: AsyncSession):
     from app.config import settings
     result = await db.execute(select(Admin).limit(1))

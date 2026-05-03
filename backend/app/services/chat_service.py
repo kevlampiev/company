@@ -9,8 +9,6 @@ from app.core.encryption import decrypt_api_key
 from app.schemas.chat import ChatResponse
 from app import crud
 
-bot_cache = {}
-
 
 async def process_chat(db: AsyncSession, message) -> ChatResponse:
     bot = await crud.get_bot_by_id(db, message.bot_id)

@@ -131,7 +131,7 @@ docker compose down -v
 
 - **Frontend**: Vue 3 + Vite + TailwindCSS (порт 3000, проксируется через nginx)
 - **Backend**: FastAPI + SQLAlchemy 2.0 + LangGraph (порт 8000), пакеты управляются `uv` (`backend/pyproject.toml` + `backend/uv.lock`)
-- **Database**: `alexeye/postgres-azure-flex:16` — PostgreSQL 16 с расширениями Azure Database for PostgreSQL Flexible Server (pgvector, TimescaleDB, pg_cron, Apache AGE и др.)
+- **Database**: `alexeye/postgres-azure-flex:17` — PostgreSQL 17 с расширениями Azure Database for PostgreSQL Flexible Server (pgvector, TimescaleDB, pg_cron, Apache AGE и др.)
 - **Cache**: Redis
 - **Proxy**: Nginx (HTTPS на 443, HTTP редирект на 80 → 443)
 
