@@ -7,7 +7,7 @@
           <option v-for="bot in bots" :key="bot.id" :value="bot.id">{{ bot.name }}</option>
         </select>
       </div>
-      
+
       <div class="h-96 overflow-y-auto p-4 space-y-4">
         <div v-for="(msg, i) in messages" :key="i" :class="msg.role === 'user' ? 'text-right' : 'text-left'">
           <div :class="msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100'" class="inline-block px-4 py-2 rounded-lg max-w-lg">
@@ -15,7 +15,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="p-4 border-t flex gap-2">
         <input v-model="query" @keyup.enter="sendMessage" class="flex-1 px-3 py-2 border rounded-lg" placeholder="Введите сообщение..." />
         <button @click="sendMessage" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">Отправить</button>
@@ -41,11 +41,11 @@ async function loadBots() {
 
 async function sendMessage() {
   if (!selectedBot.value || !query.value.trim()) return
-  
+
   const userMsg = query.value
   messages.value.push({ role: 'user', content: userMsg })
   query.value = ''
-  
+
   try {
     const { data } = await api.post('/chat', {
       bot_id: selectedBot.value,

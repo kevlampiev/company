@@ -1,6 +1,6 @@
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel
 
 
 class BotCreate(BaseModel):
@@ -9,20 +9,20 @@ class BotCreate(BaseModel):
     system_prompt: str
     provider: str
     model: str
-    api_key: Optional[str] = None
+    api_key: str | None = None
     is_active: bool = True
     use_rag: bool = False
 
 
 class BotUpdate(BaseModel):
-    name: Optional[str] = None
-    area: Optional[str] = None
-    system_prompt: Optional[str] = None
-    provider: Optional[str] = None
-    model: Optional[str] = None
-    api_key: Optional[str] = None
-    is_active: Optional[bool] = None
-    use_rag: Optional[bool] = None
+    name: str | None = None
+    area: str | None = None
+    system_prompt: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    api_key: str | None = None
+    is_active: bool | None = None
+    use_rag: bool | None = None
 
 
 class BotResponse(BaseModel):
@@ -37,7 +37,7 @@ class BotResponse(BaseModel):
     use_rag: bool
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 

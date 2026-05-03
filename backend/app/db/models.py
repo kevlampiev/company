@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
@@ -9,7 +10,7 @@ class Base(DeclarativeBase):
 
 class Admin(Base):
     __tablename__ = "admins"
-    
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -18,7 +19,7 @@ class Admin(Base):
 
 class Bot(Base):
     __tablename__ = "bots"
-    
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     area: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -29,12 +30,14 @@ class Bot(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     use_rag: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class ClawApiKey(Base):
     __tablename__ = "claw_api_keys"
-    
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     bot_id: Mapped[int] = mapped_column(Integer, nullable=False)
     key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -43,7 +46,7 @@ class ClawApiKey(Base):
 
 class Message(Base):
     __tablename__ = "messages"
-    
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     bot_id: Mapped[int] = mapped_column(Integer, nullable=False)
     thread_id: Mapped[str] = mapped_column(String(100), nullable=False)

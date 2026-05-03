@@ -1,14 +1,20 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import async_session, engine, get_db
-from app.db.models import Base
-from app.core.security import create_access_token, create_refresh_token, verify_password, decode_token
-from app.core.encryption import encrypt_api_key
-from app.schemas import auth, bot, chat as chat_schema
 from app import crud
+from app.core.encryption import encrypt_api_key
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    verify_password,
+)
+from app.db.models import Base
+from app.db.session import async_session, engine, get_db
+from app.schemas import auth, bot
+from app.schemas import chat as chat_schema
 
 app = FastAPI(title="AI Bot Manager", version="1.0.0")
 
@@ -52,7 +58,7 @@ async def refresh_token(refresh_token: str):
         access_token = create_access_token({"sub": payload["sub"]})
         return {"access_token": access_token, "refresh_token": refresh_token}
     except Exception:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        raise HTTPException(status_code=401, detail="Invalid refresh token") from None
 
 
 @app.get("/api/v1/bots")
@@ -111,7 +117,9 @@ async def generate_claw_key(
     user: dict = Depends(crud.get_current_user),
 ):
     import secrets
+
     from app.core.security import hash_password
+
     token = secrets.token_urlsafe(32)
     key_hash = hash_password(token)
     await crud.create_claw_key(db, bot_id, key_hash)
@@ -125,6 +133,7 @@ async def chat(
     user: dict = Depends(crud.get_current_user),
 ):
     from app.services.chat_service import process_chat
+
     return await process_chat(db, message)
 
 
@@ -135,9 +144,12 @@ async def claw_endpoint(
     api_key: str = Depends(crud.verify_claw_key),
 ):
     from app.services.chat_service import process_chat
+
     bot_obj = await crud.get_bot_by_name(db, request.bot_id)
     if not bot_obj or not bot_obj.is_active:
         raise HTTPException(status_code=503, detail="Bot unavailable")
 
-    message = chat_schema.ChatMessage(bot_id=bot_obj.id, query=request.query, thread_id=request.thread_id)
+    message = chat_schema.ChatMessage(
+        bot_id=bot_obj.id, query=request.query, thread_id=request.thread_id
+    )
     return await process_chat(db, message)

@@ -1,11 +1,10 @@
 from pydantic import BaseModel
-from typing import Optional
 
 
 class ChatMessage(BaseModel):
     bot_id: int
     query: str
-    thread_id: Optional[str] = None
+    thread_id: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -17,4 +16,4 @@ class ChatResponse(BaseModel):
 class ClawRequest(BaseModel):
     bot_id: str
     query: str
-    thread_id: Optional[str] = None
+    thread_id: str | None = None

@@ -1,9 +1,7 @@
 from pathlib import Path
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 _REPO_ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
 
@@ -24,7 +22,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = Field(...)
     POSTGRES_DB: str = "ai_bots"
-    DATABASE_URL: Optional[str] = None
+    DATABASE_URL: str | None = None
 
     REDIS_URL: str = "redis://redis:6379/0"
 
@@ -40,4 +38,4 @@ class Settings(BaseSettings):
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@db:5432/{self.POSTGRES_DB}"
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]  # pydantic-settings reads required fields from env/.env
