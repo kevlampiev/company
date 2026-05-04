@@ -4,7 +4,7 @@
       <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold">Управление ботами</h1>
         <div class="flex gap-2">
-          <select @change="addDemoBot($event.target.value)" class="px-4 py-2 border rounded-lg">
+          <select ref="demoSelect" @change="addDemoBot($event.target.value)" class="px-4 py-2 border rounded-lg">
             <option value="">+ Добавить демо-бота</option>
             <option value="lawyer">Юрист (DeepSeek)</option>
             <option value="accountant">Бухгалтер (Qwen)</option>
@@ -26,11 +26,12 @@
               <th class="px-4 py-3 text-left">Провайдер</th>
               <th class="px-4 py-3 text-left">Модель</th>
               <th class="px-4 py-3 text-left">Статус</th>
+              <th class="px-4 py-3 text-left">Связь</th>
               <th class="px-4 py-3 text-left">Действия</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="bot in bots" :key="bot.id" class="border-t">
+            <tr v-for="bot in bots" :key="bot.id" class="border-t" :class="bot.connection_error ? 'bg-gray-100 opacity-60' : ''">
               <td class="px-4 py-3">{{ bot.name }}</td>
               <td class="px-4 py-3">{{ bot.area }}</td>
               <td class="px-4 py-3">{{ bot.provider }}</td>
@@ -40,9 +41,15 @@
                   {{ bot.is_active ? 'Вкл' : 'Выкл' }}
                 </span>
               </td>
+              <td class="px-4 py-3">
+                <span v-if="bot.connection_error" class="text-red-600 text-sm">Ошибка</span>
+                <span v-else-if="bot.connection_tested" class="text-green-600 text-sm">OK</span>
+                <span v-else class="text-gray-400 text-sm">не пров.</span>
+              </td>
               <td class="px-4 py-3 space-x-2">
                 <button @click="editBot(bot)" class="text-blue-600 hover:underline">Ред.</button>
                 <button @click="generateKey(bot)" class="text-green-600 hover:underline">Ключ</button>
+                <button @click="openChat(bot.id)" class="text-purple-600 hover:underline">Чат</button>
                 <button @click="deleteBot(bot.id)" class="text-red-600 hover:underline">Удал.</button>
               </td>
             </tr>
@@ -109,11 +116,15 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '../api/auth'
+
+const router = useRouter()
 
 const bots = ref([])
 const showModal = ref(false)
 const editingBot = ref(null)
+const demoSelect = ref(null)
 const form = ref({
   name: '', area: '', provider: 'deepseek', model: '',
   api_key: '', system_prompt: '', is_active: true, use_rag: false
@@ -175,7 +186,7 @@ async function addDemoBot(type) {
       use_rag: false
     })
     bots.value.push(data)
-    event.target.value = ''
+    if (demoSelect.value) demoSelect.value.value = ''
   } catch (e) {
     console.log('DEBUG ERROR adding demo bot:', e.response?.data || e.message)
   }
@@ -183,15 +194,27 @@ async function addDemoBot(type) {
 
 async function saveBot() {
   try {
+    let savedBot
     if (editingBot.value) {
       const { data } = await api.put(`/bots/${editingBot.value.id}`, form.value)
       const idx = bots.value.findIndex(b => b.id === editingBot.value.id)
       if (idx !== -1) bots.value[idx] = data
+      savedBot = data
     } else {
       const { data } = await api.post('/bots', form.value)
       bots.value.push(data)
+      savedBot = data
     }
     closeModal()
+    if (savedBot && form.value.api_key) {
+      try {
+        const { data: testResult } = await api.post(`/bots/${savedBot.id}/test`)
+        savedBot.connection_tested = true
+        savedBot.connection_error = !testResult.success
+      } catch {
+        savedBot.connection_error = true
+      }
+    }
   } catch (e) {
     console.log('DEBUG ERROR saving bot:', e.response?.data || e.message)
   }
@@ -221,6 +244,10 @@ async function generateKey(bot) {
   } catch (e) {
     console.log('DEBUG ERROR generating key:', e.response?.data || e.message)
   }
+}
+
+function openChat(botId) {
+  router.push({ path: '/chat', query: { bot: botId } })
 }
 
 function closeModal() {

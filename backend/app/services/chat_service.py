@@ -34,6 +34,9 @@ async def process_chat(db: AsyncSession, message) -> ChatResponse:
 async def call_llm(bot: Bot, query: str, thread_id: str) -> str:
     api_key = decrypt_api_key(bot.api_key_encrypted) if bot.api_key_encrypted else ""
 
+    if not api_key:
+        return "Ошибка: API-ключ не настроен. Откройте настройки бота и добавьте ключ."
+
     if bot.provider == "openai":
         return await call_openai(bot.model, api_key, bot.system_prompt, query)
     elif bot.provider == "anthropic":
@@ -89,6 +92,7 @@ async def call_openai_compatible(
     base_urls = {
         "groq": "https://api.groq.com/openai/v1",
         "openrouter": "https://openrouter.ai/api/v1",
+        "deepseek": "https://api.deepseek.com/v1",
     }
     base_url = base_urls.get(provider, provider)
 
@@ -109,3 +113,61 @@ async def save_message(db: AsyncSession, bot_id: int, thread_id: str, role: str,
     msg = Message(bot_id=bot_id, thread_id=thread_id, role=role, content=content)
     db.add(msg)
     await db.commit()
+
+
+async def test_llm_connection(bot: Bot) -> tuple[bool, str]:
+    """Test LLM connectivity. Returns (success, message)."""
+    api_key = decrypt_api_key(bot.api_key_encrypted) if bot.api_key_encrypted else ""
+    if not api_key:
+        return False, "API-ключ не настроен"
+
+    try:
+        if bot.provider == "openai":
+            return await test_openai(bot.model, api_key, bot.system_prompt)
+        elif bot.provider == "anthropic":
+            return await test_anthropic(bot.model, api_key, bot.system_prompt)
+        else:
+            return await test_openai_compatible(bot.provider, bot.model, api_key, bot.system_prompt)
+    except Exception as e:
+        return False, f"Ошибка подключения: {e}"
+
+
+async def test_openai(model: str, api_key: str, system: str) -> tuple[bool, str]:
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": model,
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": "test"}],
+        "max_tokens": 1,
+    }
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
+        resp.raise_for_status()
+    return True, "OK"
+
+
+async def test_anthropic(model: str, api_key: str, system: str) -> tuple[bool, str]:
+    headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
+    payload = {"model": model, "system": system, "messages": [{"role": "user", "content": "test"}], "max_tokens": 1}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post("https://api.anthropic.com/v1/messages", json=payload, headers=headers)
+        resp.raise_for_status()
+    return True, "OK"
+
+
+async def test_openai_compatible(provider: str, model: str, api_key: str, system: str) -> tuple[bool, str]:
+    base_urls = {
+        "groq": "https://api.groq.com/openai/v1",
+        "openrouter": "https://openrouter.ai/api/v1",
+        "deepseek": "https://api.deepseek.com/v1",
+    }
+    base_url = base_urls.get(provider, provider)
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": model,
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": "test"}],
+        "max_tokens": 1,
+    }
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
+        resp.raise_for_status()
+    return True, "OK"

@@ -112,8 +112,11 @@ async def update_bot(
         raise HTTPException(status_code=404, detail="Bot not found")
 
     update_data = data.model_dump(exclude_unset=True)
-    if "api_key" in update_data and update_data["api_key"]:
-        update_data["api_key_encrypted"] = encrypt_api_key(update_data.pop("api_key"))
+    if "api_key" in update_data:
+        if update_data["api_key"]:
+            update_data["api_key_encrypted"] = encrypt_api_key(update_data.pop("api_key"))
+        else:
+            update_data.pop("api_key")
 
     await bot_repo.update(db, bot_obj, update_data)
     return bot.BotResponse.from_bot(bot_obj)
@@ -138,6 +141,22 @@ async def generate_claw_key(
     token = secrets.token_urlsafe(32)
     await claw_repo.create(db, bot_id, hash_password(token))
     return {"token": token, "message": "Save this key! It will not be shown again."}
+
+
+@app.post("/api/v1/bots/{bot_id}/test", response_model=dict)
+async def test_bot_connection(
+    bot_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    from app.services.chat_service import test_llm_connection
+
+    bot_obj = await bot_repo.get_by_id(db, bot_id)
+    if not bot_obj:
+        raise HTTPException(status_code=404, detail="Bot not found")
+
+    success, message = await test_llm_connection(bot_obj)
+    return {"success": success, "message": message}
 
 
 @app.post("/api/v1/chat", response_model=chat_schema.ChatResponse)

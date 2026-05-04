@@ -1,7 +1,8 @@
 <template>
   <div class="min-h-screen bg-gray-50 p-8">
     <div class="max-w-4xl mx-auto bg-white rounded-lg shadow">
-      <div class="p-4 border-b">
+      <div class="p-4 border-b flex items-center gap-4">
+        <button @click="router.push('/dashboard/bots')" class="text-blue-600 hover:underline">&larr; К списку ботов</button>
         <select v-model="selectedBot" class="px-3 py-2 border rounded">
           <option :value="null">Выберите бота</option>
           <option v-for="bot in bots" :key="bot.id" :value="bot.id">{{ bot.name }}</option>
@@ -26,7 +27,11 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import api from '../api/auth'
+
+const route = useRoute()
+const router = useRouter()
 
 const bots = ref([])
 const selectedBot = ref(null)
@@ -37,6 +42,9 @@ const threadId = ref('thread_' + Date.now())
 async function loadBots() {
   const { data } = await api.get('/bots')
   bots.value = data.filter(b => b.is_active)
+  if (route.query.bot) {
+    selectedBot.value = Number(route.query.bot)
+  }
 }
 
 async function sendMessage() {
