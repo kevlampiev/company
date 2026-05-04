@@ -9,31 +9,30 @@
 ## Dev workflow
 
 ```bash
-make check    # lint → typecheck → test (pre-push contract)
-make lint     # ruff check
-make typecheck # mypy
-make test      # pytest only
+make check      # lint → typecheck → test-cov (75% threshold, pre-push contract)
+make lint       # ruff check
+make typecheck  # mypy
+make test       # pytest (requires Docker daemon for testcontainers)
+make fmt        # ruff format + ruff --fix
 ```
 
-Pre-commit (`pre-commit install` after `make install`) runs ruff + format only — no mypy or pytest. Run `make check` before pushing.
+Backend is bind-mounted at `/app`, edits are live, but **uvicorn does NOT auto-reload** — restart: `docker compose restart backend`
 
-Backend is bind-mounted into the container at `/app`, so Python edits are live, but **uvicorn does NOT auto-reload** — restart with:
-```bash
-docker compose restart backend
-```
-
-## venv is outside the bind-mount
-The backend image places the venv at `/opt/venv`, **outside** the `/app` bind-mount. This prevents the bind from shadowing the venv. Do not move it under `/app` without also revisiting the bind mount in `docker-compose.yml`.
+## venv outside bind-mount
+Backend image places venv at `/opt/venv`, **outside** `/app` bind-mount. Prevents bind from shadowing venv. Do not move under `/app` without revisiting `docker-compose.yml`.
 
 ## Test loop scope is load-bearing
-`asyncio_default_test_loop_scope = "session"` in `pyproject.toml` keeps SQLAlchemy async connections alive across tests. Rearrange it and you'll see "Task was destroyed but it is pending" errors.
+`asyncio_default_test_loop_scope = "session"` in `pyproject.toml` keeps SQLAlchemy async connections alive across tests. Change it and you'll see "Task was destroyed but it is pending" errors.
+
+## Python version
+Requires Python 3.12 exactly (`>=3.12,<3.13` in pyproject.toml).
 
 ## Secrets setup
 Generate `.env` from `backend/` (not repo root):
 ```bash
 cd backend && uv run python -m scripts.init_env
 ```
-The Fernet key (`ENCRYPTION_KEY`) must be a 32-byte url-safe base64 string — a free-form string will raise on first encrypt. The script generates it correctly via `Fernet.generate_key()`.
+`ENCRYPTION_KEY` must be 32-byte url-safe base64 — script uses `Fernet.generate_key()` correctly.
 
 `JWT_SECRET`, `ENCRYPTION_KEY`, `ADMIN_PASSWORD`, `POSTGRES_PASSWORD` are all required — pydantic raises `ValidationError` on startup if any are missing.
 
@@ -61,6 +60,4 @@ Production traffic goes through nginx on 443; host ports are for debugging only.
 
 ## Key conventions
 - **bcrypt 72-byte limit**: `ADMIN_PASSWORD` is truncated to 72 chars before hashing
-- **No deprecation shims**: remove functionality outright; no backward-compat paths
-- **Postgres stored functions**: never use `COMMIT`/`ROLLBACK` — not allowed inside functions
 - **CORS is loose**: `allow_origins=["*"]` with `allow_credentials=True` — works only because nginx proxies frontend→backend (same origin). Do not expose the backend port directly.
