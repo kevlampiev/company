@@ -17,7 +17,11 @@
         </div>
       </div>
 
-      <div class="p-4 border-t flex gap-2">
+      <div class="p-4 border-t flex gap-2 items-center">
+        <input type="file" ref="fileInput" @change="handleFileUpload" class="hidden" multiple />
+        <button @click="onFileButtonClick" class="px-4 py-2 border rounded hover:bg-gray-50" title="Прикрепить файл">
+          📎
+        </button>
         <input v-model="query" @keyup.enter="sendMessage" class="flex-1 px-3 py-2 border rounded-lg" placeholder="Введите сообщение..." />
         <button @click="sendMessage" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">Отправить</button>
       </div>
@@ -38,31 +42,57 @@ const selectedBot = ref(null)
 const query = ref('')
 const messages = ref([])
 const threadId = ref('thread_' + Date.now())
+const files = ref([])
+const fileInput = ref(null)
 
-async function loadBots() {
-  const { data } = await api.get('/bots')
-  bots.value = data.filter(b => b.is_active)
-  if (route.query.bot) {
-    selectedBot.value = Number(route.query.bot)
+function onFileButtonClick() {
+  if (fileInput.value) {
+    fileInput.value.click()
   }
+}
+
+function handleFileUpload(event) {
+  var newFiles = Array.from(event.target.files)
+  files.value = files.value.concat(newFiles)
+  event.target.value = ''
 }
 
 async function sendMessage() {
   if (!selectedBot.value || !query.value.trim()) return
 
-  const userMsg = query.value
-  messages.value.push({ role: 'user', content: userMsg })
+  var userMsg = query.value
+  var fileNames = files.value.map(function(f) { return f.name })
+  messages.value.push({
+    role: 'user',
+    content: userMsg + (fileNames.length ? ' [Files: ' + fileNames.join(', ') + ']' : '')
+  })
   query.value = ''
+  var currentFiles = files.value.slice()
+  files.value = []
 
   try {
-    const { data } = await api.post('/chat', {
-      bot_id: selectedBot.value,
-      query: userMsg,
-      thread_id: threadId.value
+    var formData = new FormData()
+    formData.append('bot_id', selectedBot.value)
+    formData.append('query', userMsg)
+    formData.append('thread_id', threadId.value)
+    currentFiles.forEach(function(file) {
+      formData.append('files', file, file.name)
     })
-    messages.value.push({ role: 'assistant', content: data.answer })
+
+    var response = await api.post('/chat', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    messages.value.push({ role: 'assistant', content: response.data.answer })
   } catch (e) {
     messages.value.push({ role: 'assistant', content: 'Ошибка отправки сообщения' })
+  }
+}
+
+async function loadBots() {
+  var response = await api.get('/bots')
+  bots.value = response.data.filter(function(b) { return b.is_active })
+  if (route.query.bot) {
+    selectedBot.value = Number(route.query.bot)
   }
 }
 

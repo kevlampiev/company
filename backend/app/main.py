@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from alembic.config import Config as AlembicConfig
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -161,12 +161,22 @@ async def test_bot_connection(
 
 @app.post("/api/v1/chat", response_model=chat_schema.ChatResponse)
 async def chat(
-    message: chat_schema.ChatMessage,
+    bot_id: int = Form(...),
+    query: str = Form(...),
+    thread_id: str = Form(None),
+    files: list[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     from app.services.chat_service import process_chat
+    from app.schemas.chat import ChatMessage
 
+    message = ChatMessage(
+        bot_id=bot_id,
+        query=query,
+        thread_id=thread_id,
+        files=[await f.read() for f in files] if files else None
+    )
     return await process_chat(db, message)
 
 

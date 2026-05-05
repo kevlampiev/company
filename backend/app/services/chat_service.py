@@ -1,4 +1,5 @@
 import httpx
+import io
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,6 +7,36 @@ from app.core.encryption import decrypt_api_key
 from app.db.models import Bot, Message
 from app.repositories import bot as bot_repo
 from app.schemas.chat import ChatResponse
+
+from pdfminer.high_level import extract_text as pdf_extract
+from openpyxl import load_workbook
+from docx import Document
+
+
+async def extract_text_from_file(filename: str, content: bytes) -> str:
+    """Extract text from PDF, XLS, DOC, TXT files."""
+    ext = filename.lower().split('.')[-1] if '.' in filename else ''
+
+    try:
+        if ext == 'pdf':
+            return pdf_extract(io.BytesIO(content))
+        elif ext in ['xls', 'xlsx']:
+            wb = load_workbook(filename=io.BytesIO(content), read_only=True)
+            text = []
+            for sheet in wb:
+                for row in sheet.iter_rows(values_only=True):
+                    text.append(' '.join(str(c) for c in row if c is not None))
+            return '\n'.join(text)
+        elif ext == 'docx':
+            doc = Document(io.BytesIO(content))
+            return '\n'.join(p.text for p in doc.paragraphs)
+        elif ext == 'txt':
+            return content.decode('utf-8', errors='ignore')
+        else:
+            return f"[Unsupported file type: {ext}]"
+    except Exception as e:
+        logger.error(f"File extraction error: {e}")
+        return f"[Error extracting file: {filename}]"
 
 
 async def process_chat(db: AsyncSession, message) -> ChatResponse:
@@ -15,10 +46,21 @@ async def process_chat(db: AsyncSession, message) -> ChatResponse:
 
     thread_id = message.thread_id or "default"
 
-    await save_message(db, bot.id, thread_id, "user", message.query)
+    # Extract and append file contents if present
+    content = message.query
+    if message.files:
+        file_texts = []
+        for i, f in enumerate(message.files):
+            # Try to get filename from somewhere, or use generic name
+            filename = f"file_{i}"
+            text = await extract_text_from_file(filename, f)
+            file_texts.append(f"--- File {filename} ---\n{text}")
+        content += "\n\n" + "\n\n".join(file_texts)
+
+    await save_message(db, bot.id, thread_id, "user", content)
 
     try:
-        answer = await call_llm(bot, message.query, thread_id)
+        answer = await call_llm(bot, content, thread_id)
         answer += (
             "\n\n*Справка носит информационный характер и не заменяет официальную консультацию.*"
         )
